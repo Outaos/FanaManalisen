@@ -118,6 +118,35 @@ def polygons_from_geojson(name: str):
     for poly in polys:
         yield np.array([xy(lon, lat) for lon, lat in poly[0]])
 
+def simplify_outline(points, tolerance=.045):
+    """Remove coastline detail smaller than the map's schematic scale."""
+    p = np.asarray(points)
+    if len(p) < 5:
+        return p
+    if np.linalg.norm(p[0]-p[-1]) < 1e-9:
+        p = p[:-1]
+    split = int(np.argmax(np.linalg.norm(p-p[0],axis=1)))
+    def reduce(line):
+        if len(line) <= 2:
+            return line
+        a,b = line[0],line[-1]
+        direction = b-a
+        denom = np.dot(direction,direction)
+        if denom < 1e-12:
+            distance = np.linalg.norm(line[1:-1]-a,axis=1)
+        else:
+            t = np.clip(((line[1:-1]-a)@direction)/denom,0,1)
+            distance = np.linalg.norm(line[1:-1]-(a+t[:,None]*direction),axis=1)
+        k = int(np.argmax(distance))+1
+        if distance[k-1] <= tolerance:
+            return line[[0,-1]]
+        return np.vstack([reduce(line[:k+1])[:-1],reduce(line[k:])])
+    if split < 2 or split > len(p)-3:
+        return p
+    ring = np.vstack([reduce(p[:split+1])[:-1],
+                      reduce(np.vstack([p[split:],p[0]]))])
+    return ring
+
 def draw_land(ax, stage: int):
     if stage >= 6:
         uk = json.loads((DATA / "uk-countries.geojson").read_text(encoding="utf-8"))
@@ -131,10 +160,14 @@ def draw_land(ax, stage: int):
             polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
             for poly in polys:
                 coords = np.array([xy(lon,lat) for lon,lat in poly[0]])
+                if stage >= 9:
+                    coords = simplify_outline(coords)
                 ax.add_patch(Polygon(coords, closed=True, facecolor=country_colors[name],
                                      edgecolor="white", linewidth=2.2,
                                      joinstyle="round", zorder=0))
         for coords in polygons_from_geojson("IRL"):
+            if stage >= 9:
+                coords = simplify_outline(coords)
             ax.add_patch(Polygon(coords, closed=True, facecolor="#aedce7",
                                  edgecolor="white", linewidth=2.2, zorder=-1))
         ax.text(*xy(-4.47,52.34), "WALES", color="#216b83", fontsize=15,
@@ -266,7 +299,7 @@ def route_points_stage7(opponent):
         return np.vstack([rail,knee,(knee[0],d[1]),d])
     raise KeyError(opponent)
 
-def route_points_stage8(opponent):
+def route_points_stage8(opponent, lane=.08):
     """Keep stage 07, except for one southbound three-track corridor."""
     if opponent not in ("Aston Villa", "Coventry", "Bournemouth"):
         return route_points_stage7(opponent)
@@ -276,10 +309,10 @@ def route_points_stage8(opponent):
     # the east lane. All three follow the same bends almost to Villa.
     south = [o,(2.64,3.48),(2.93,3.19),(2.93,2.81)]
     if opponent == "Aston Villa":
-        rail = exact_offset(south,-.08)
+        rail = exact_offset(south,-lane)
         return np.vstack([rail,d])
     if opponent == "Coventry":
-        rail = exact_offset(south,.08)
+        rail = exact_offset(south,lane)
         q = rail[-1]
         knee = np.array([d[0],q[1]-(d[0]-q[0])])
         return np.vstack([rail,knee,d])
@@ -287,6 +320,8 @@ def route_points_stage8(opponent):
     return np.vstack([rail,(rail[-1][0],d[1]),d])
 
 def route_points(opponent: str, stage: int, venue: str | None = None):
+    if stage >= 9:
+        return route_points_stage8(opponent,lane=.055)
     if stage >= 8:
         return route_points_stage8(opponent)
     if stage >= 7:
@@ -502,6 +537,7 @@ def render(rows, stage):
       6:"06_revised_final_map",
       7:"07_octilinear_shared_corridors",
       8:"08_southbound_three_track_corridor",
+      9:"09_close_parallel_simplified_coast",
     }
     path=OUT/(names[stage]+".png")
     fig.savefig(path,dpi=150,facecolor=fig.get_facecolor(),bbox_inches="tight",pad_inches=.10)
@@ -511,7 +547,7 @@ def render(rows, stage):
 def main():
     rows=load_matches()
     print(f"Snapshot: {len(rows)} EPL matches; {dict(Counter(r['result'] for r in rows))}")
-    for stage in range(1,9):
+    for stage in range(1,10):
         print(render(rows,stage))
 
 if __name__=="__main__":
