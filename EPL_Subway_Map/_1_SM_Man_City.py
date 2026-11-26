@@ -18,7 +18,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patheffects as pe
-from matplotlib.patches import Circle, Polygon
+from matplotlib.patches import Circle, Polygon, Rectangle
 import numpy as np
 
 ROOT = Path(__file__).resolve().parent
@@ -43,6 +43,19 @@ CLUBS = {
     "Crystal Palace": (-0.02, 51.29, "CRYSTAL PALACE", .54, (0.13, -0.13)),
     "Brighton":       (-0.14, 50.80, "BRIGHTON", .57, (0.11, -0.09)),
     "Bournemouth":    (-1.88, 50.73, "BOURNEMOUTH", .55, (0.12, -0.10)),
+}
+
+# Remaining 2026/27 Premier League clubs. These small nodes are intentionally
+# unlabelled and have no routes until City completes a league fixture with them.
+UNPLAYED = {
+    "Arsenal": (-0.01, 51.66),
+    "Brentford": (-0.47, 51.42),
+    "Chelsea": (-0.28, 51.62),
+    "Everton": (-3.08, 53.58),
+    "Hull": (-0.37, 53.75),
+    "Leeds": (-1.57, 53.78),
+    "Newcastle": (-1.62, 55.04),
+    "Tottenham": (0.19, 51.63),
 }
 
 COLORS = {"W": "#159b66", "L": "#e34e51", "D": "#818d9b"}
@@ -88,6 +101,29 @@ def polygons_from_geojson(name: str):
         yield np.array([xy(lon, lat) for lon, lat in poly[0]])
 
 def draw_land(ax, stage: int):
+    if stage >= 6:
+        uk = json.loads((DATA / "uk-countries.geojson").read_text(encoding="utf-8"))
+        country_colors = {
+            "England": CYAN, "Wales": "#46bfd9",
+            "Scotland": "#7acfe0", "Northern Ireland": "#70c8dc",
+        }
+        for feature in uk["features"]:
+            name = feature["properties"]["shapeName"]
+            geom = feature["geometry"]
+            polys = geom["coordinates"] if geom["type"] == "MultiPolygon" else [geom["coordinates"]]
+            for poly in polys:
+                coords = np.array([xy(lon,lat) for lon,lat in poly[0]])
+                ax.add_patch(Polygon(coords, closed=True, facecolor=country_colors[name],
+                                     edgecolor="white", linewidth=2.2,
+                                     joinstyle="round", zorder=0))
+        for coords in polygons_from_geojson("IRL"):
+            ax.add_patch(Polygon(coords, closed=True, facecolor="#aedce7",
+                                 edgecolor="white", linewidth=2.2, zorder=-1))
+        ax.text(*xy(-4.47,52.34), "WALES", color="#216b83", fontsize=15,
+                weight="bold", alpha=.72, zorder=1)
+        ax.text(*xy(-4.75,55.13), "SCOTLAND", color="#216b83", fontsize=13,
+                weight="bold", alpha=.70, zorder=1)
+        return
     for country in ("GBR", "IRL"):
         for coords in polygons_from_geojson(country):
             ax.add_patch(Polygon(
@@ -158,7 +194,7 @@ def route_points(opponent: str, stage: int, venue: str | None = None):
     if stage == 1:
         return np.array([origin, dest])
     corridor, amount, count = ROUTE[opponent]
-    if stage == 5:
+    if stage >= 5:
         # Final routing order follows the relative positions of destinations.
         # Forest leaves the eastern fan early; the London tracks stay ordered.
         final_routes = {
@@ -184,12 +220,31 @@ def route_points(opponent: str, stage: int, venue: str | None = None):
     # gradually, allowing a meaningful rail fan rather than overlapping starts.
     base = offset_polyline(base, amount)
     base[0] = origin
-    if len(base) > 1:
+    if stage >= 6:
+        # A short, tightly spaced departure bundle gives every route in a
+        # sector the same heading before its first split. Both new points
+        # lie within or just outside the City station, so they read as tracks.
+        rank = {
+            "Fulham": -2, "Brighton": -1, "Crystal Palace": 0,
+            "Nottm Forest": 1, "Ipswich": 2,
+            "Aston Villa": -1, "Coventry": 1,
+            "Liverpool": -1, "Man United": 1,
+        }.get(opponent, 0)
+        direction = CORRIDORS[corridor][1] - origin
+        direction /= np.linalg.norm(direction)
+        normal = np.array([-direction[1], direction[0]])
+        lane = rank * .042
+        portal = origin + direction * .11 + normal * lane
+        lead = origin + direction * .31 + normal * lane
+        base = np.vstack([origin, portal, lead, base[1:]])
+    elif len(base) > 1:
         base[1] = base[1] * .85 + origin * .15
     branch = simplify_branch(base[-1], dest)
     return np.vstack([base, branch])
 
 def draw_route(ax, points, color, stage, venue):
+    if stage >= 6:
+        points = rounded_route(points)
     x, y = points[:,0], points[:,1]
     width = 3.6 if stage < 4 else 4.4
     if stage >= 4:
@@ -197,8 +252,41 @@ def draw_route(ax, points, color, stage, venue):
                 solid_joinstyle="round",zorder=2)
     ax.plot(x,y,color=color,linewidth=width,solid_capstyle="round",
             solid_joinstyle="round",zorder=3)
+    if stage >= 6 and len(points) > 1:
+        # Small arrow next to the opponent station: City home = toward City,
+        # City away = toward opponent. Colour still records City's result.
+        a, b = points[-2], points[-1]
+        d = b-a
+        d /= np.linalg.norm(d)
+        if venue == "HOME":
+            start, end = b-d*.12, b-d*.28
+        else:
+            start, end = b-d*.29, b-d*.12
+        ax.annotate("", xy=end, xytext=start,
+                    arrowprops=dict(arrowstyle="-|>", mutation_scale=13,
+                                    lw=1.2, color=INK), zorder=7)
 
-def draw_nodes(ax, stage: int):
+def rounded_route(points, radius=.042):
+    """Soften each schematic turn without changing route endpoints."""
+    points = np.asarray(points)
+    out = [points[0]]
+    for i in range(1, len(points)-1):
+        a,b,c = points[i-1:i+2]
+        u, w = a-b, c-b
+        lu, lw = np.linalg.norm(u), np.linalg.norm(w)
+        if min(lu,lw) < 1e-5:
+            continue
+        r = min(radius, lu*.28, lw*.28)
+        p = b + u/lu*r
+        q = b + w/lw*r
+        out.append(p)
+        for t in np.linspace(.2,.8,4):
+            out.append((1-t)**2*p + 2*t*(1-t)*b + t*t*q)
+        out.append(q)
+    out.append(points[-1])
+    return np.array(out)
+
+def draw_nodes(ax, stage: int, rows):
     names = list(CLUBS)
     if stage < 4:
         names = ["Man City"] + [n for n in names if n != "Man City"]
@@ -216,10 +304,23 @@ def draw_nodes(ax, stage: int):
                     fontsize=7.5 if stage < 5 else 12.0,
                     fontweight="bold",color=INK,zorder=10,
                     path_effects=[pe.withStroke(linewidth=1.3,foreground=HALO)] if stage>=5 else [])
+    if stage >= 6:
+        played = {r["opponent"] for r in rows}
+        for name,(lon,lat) in UNPLAYED.items():
+            if name in played:
+                continue
+            ax.add_patch(Circle(xy(lon,lat), .024, facecolor=HALO,
+                                edgecolor="#526478", linewidth=1.25,
+                                zorder=8))
 
 def decorate(ax, rows, stage):
-    title_x = 1.08 if stage >= 5 else .10
-    title_y = 5.86 if stage >= 5 else 6.87
+    if stage >= 6:
+        ax.add_patch(Rectangle((.28,6.08),4.87,.87,
+                               facecolor=SEA,edgecolor="none",zorder=11))
+        ax.add_patch(Rectangle((.28,.05),4.87,.70,
+                               facecolor=SEA,edgecolor="none",zorder=11))
+    title_x = .42 if stage >= 6 else 1.08 if stage >= 5 else .10
+    title_y = 6.82 if stage >= 6 else 5.86 if stage >= 5 else 6.87
     ax.text(title_x,title_y,"MAN CITY",fontsize=32 if stage>=5 else 25,
             weight="heavy",color=INK,va="top",zorder=12)
     ax.text(title_x+.02,title_y-.36,"THE 2026/27 RESULTS NETWORK",fontsize=13 if stage>=5 else 10.8,
@@ -227,19 +328,21 @@ def decorate(ax, rows, stage):
     ax.text(title_x+.02,title_y-.60,"PREMIER LEAGUE  ·  THROUGH 26 NOV 2026",fontsize=10 if stage>=5 else 8.5,
             color="#536477",zorder=12)
     if stage>=4:
-        y=.52
-        legend = [(1.12,"W","WIN"),(2.46,"D","DRAW"),(3.77,"L","LOSS")] if stage>=5 else [(.28,"W","WIN"),(1.38,"D","DRAW"),(2.50,"L","LOSS")]
+        y=.50 if stage >= 6 else .52
+        legend = [(.39,"W","WIN"),(1.77,"D","DRAW"),(3.14,"L","LOSS")] if stage>=6 else [(1.12,"W","WIN"),(2.46,"D","DRAW"),(3.77,"L","LOSS")] if stage>=5 else [(.28,"W","WIN"),(1.38,"D","DRAW"),(2.50,"L","LOSS")]
         for x,code,word in legend:
             ax.plot([x,x+.28],[y,y],color=COLORS[code],lw=4.5,zorder=11)
             ax.text(x+.36,y,word,va="center",fontsize=11 if stage>=5 else 9,weight="bold",color=INK,zorder=11)
-        ax.text(1.12 if stage>=5 else .28,.28,"H / A beside each club = City home / away",
-                fontsize=9.5 if stage>=5 else 8.3,color="#526478",zorder=11)
+        caption = ("Arrow toward club = City away  ·  arrow toward City = City home  ·  small dots = unplayed"
+                   if stage >= 6 else "H / A beside each club = City home / away")
+        ax.text(.39 if stage>=6 else 1.12 if stage>=5 else .28,.26,caption,
+                fontsize=8.5 if stage>=6 else 9.5 if stage>=5 else 8.3,color="#526478",zorder=11)
     else:
         ax.text(.12,.31,f"{len(rows)} completed matches  ·  stage {stage}/5",
                 fontsize=9,color=INK,zorder=11)
 
 def label_home_away(ax, rows, stage):
-    if stage < 4: return
+    if stage < 4 or stage >= 6: return
     by_name = {r["opponent"]:r for r in rows}
     for name,r in by_name.items():
         p = club_xy(name)
@@ -254,7 +357,9 @@ def render(rows, stage):
     fig,ax=plt.subplots(figsize=(10.8,15.2),dpi=150)
     fig.patch.set_facecolor(SEA)
     ax.set_facecolor(SEA)
-    if stage >= 5:
+    if stage >= 6:
+        ax.set_xlim(.28,5.15); ax.set_ylim(.05,6.95)
+    elif stage >= 5:
         ax.set_xlim(1.03,5.15); ax.set_ylim(.05,5.95)
     else:
         ax.set_xlim(-.05,5.15); ax.set_ylim(.05,7.05)
@@ -266,7 +371,7 @@ def render(rows, stage):
     for row in rows:
         points=route_points(row["opponent"],stage,row["venue"])
         draw_route(ax,points,COLORS[row["result"]],stage,row["venue"])
-    draw_nodes(ax,stage)
+    draw_nodes(ax,stage,rows)
     label_home_away(ax,rows,stage)
     decorate(ax,rows,stage)
     names={
@@ -275,6 +380,7 @@ def render(rows, stage):
       3:"03_parallel_tracks",
       4:"04_stations_and_result_legend",
       5:"05_final_polished_map",
+      6:"06_revised_final_map",
     }
     path=OUT/(names[stage]+".png")
     fig.savefig(path,dpi=150,facecolor=fig.get_facecolor(),bbox_inches="tight",pad_inches=.10)
@@ -284,9 +390,8 @@ def render(rows, stage):
 def main():
     rows=load_matches()
     print(f"Snapshot: {len(rows)} EPL matches; {dict(Counter(r['result'] for r in rows))}")
-    for stage in range(1,6):
+    for stage in range(1,7):
         print(render(rows,stage))
 
 if __name__=="__main__":
     main()
-
