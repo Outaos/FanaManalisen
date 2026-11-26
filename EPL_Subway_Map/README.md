@@ -37,6 +37,33 @@ clearance limits. Run `python _1_SM_Man_City_v2.py --check` for the audit.
 
 The drawn lines are **diagrammatic**, not road, rail, or travel routes. Stadium markers remain near their real locations but are separated slightly where needed. In stages 07–09, the southeast routes share a diagonal trunk past the Nottingham area; the Fulham, Palace, and Brighton tracks stay parallel almost to Fulham. In stages 08–09, Villa, Bournemouth, and Coventry share the southbound trunk nearly to Villa, where the outer lanes branch and Bournemouth carries on between them. Stage 09 reduces the southbound lane spacing to match the southeast bundle and simplifies the coastline and internal borders at the map's display scale. Westbound routes leave City in adjacent lanes. Long segments are horizontal, vertical, or 45° diagonals; only tiny station connectors use other angles. White casings separate adjacent tracks. The outline of Ireland in stages 1–5 comes from [johan/world.geo.json](https://github.com/johan/world.geo.json), derived from Natural Earth public-domain data. The revised map's [UK country boundaries](data/uk-countries.geojson) are from [GeoDataViewer's UK Countries Boundaries](https://geodataviewer.com/datasets/boundaries/uk-countries-boundaries/) (CC BY 4.0; original administrative boundaries: ©EuroGeographics ©UN-FAO ©Turkstat, via Eurostat GISCO).
 
+## V3: complete 2025/26 season, eight clubs
+
+`_1_SM_Man_City_v3.py` applies the v2 rule-based routing to Man City, Man
+United, Arsenal, Chelsea, Tottenham, Liverpool, Everton, and West Ham. Each
+club has separate home and away maps in `outputs/epl_2026/`, for 16 PNGs total.
+Each map has 19 result lines. Green means a win for the named club, red a loss,
+and gray a draw. Tracks have muted colors and **no white casing or outline**.
+The club grounds stay near their geographic locations, with small displacements
+for legibility. A home map connects the selected club to its 19 opponents as
+a schematic comparison; it does not depict travel from those opponents.
+For western hubs where v2's shared southeast trunk creates more than two
+crossings, v3 uses a deterministic two-bend radial fan that preserves route
+separation. This keeps the club-specific result lines readable.
+
+```sh
+python _1_SM_Man_City_v3.py
+python _1_SM_Man_City_v3.py --club Arsenal
+```
+
+The fixed [2025/26 match CSV](data/epl_2025_26_results.csv) contains all 380
+league fixtures, with one home and one away meeting for each ordered pair of
+the 20 clubs. It is a five-column normalization of
+[Football-Data.co.uk's freely published E0 season file](https://football-data.co.uk/mmz4281/2526/E0.csv),
+downloaded 26 November 2026. The script validates the complete fixture matrix
+before drawing and never fetches results at runtime. The v2 script remains
+unchanged.
+
 ## Data check
 
 The [Manchester City results page](https://live.mancity.com/results) lists scores across competitions, so every included row has an individual City match-report URL marked Premier League. The 16 August Arsenal result was the **Community Shield**, and the 28 October Brighton result was a **cup match**; neither appears in the CSV. The snapshot contains **11 league matches: 7 wins, 1 draw, 3 losses**.
