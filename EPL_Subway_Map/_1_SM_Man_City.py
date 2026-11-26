@@ -58,6 +58,23 @@ UNPLAYED = {
     "Tottenham": (0.19, 51.63),
 }
 
+# Stage 07 shifts three stations slightly to keep the new route grid clear.
+SCHEMATIC_07 = {"Nottm Forest": (-1.32,52.94)}
+UNPLAYED_07 = {**UNPLAYED, "Arsenal": (.06,51.66),
+               "Chelsea": (-0.27,51.46),
+               "Everton": (-3.08,53.66)}
+
+# Compact station-label offsets for the octilinear final. Earlier stage
+# exports retain their original positions so the design history is visible.
+LABEL_07 = {
+    "Man City": (.06,.21), "Man United": (-.025,-.105),
+    "Liverpool": (-.035,.105), "Sunderland": (.10,.025),
+    "Nottm Forest": (.085,.025), "Aston Villa": (-.08,-.145),
+    "Coventry": (.075,-.08), "Ipswich": (.08,.01),
+    "Fulham": (-.115,-.055), "Crystal Palace": (.085,-.055),
+    "Brighton": (.085,-.065), "Bournemouth": (.105,-.08),
+}
+
 COLORS = {"W": "#159b66", "L": "#e34e51", "D": "#818d9b"}
 INK = "#101a2d"
 CYAN = "#12add3"
@@ -68,8 +85,9 @@ def xy(lon: float, lat: float) -> tuple[float, float]:
     # Longitude is compressed to reflect its shorter distance at UK latitude.
     return ((lon + 6.4) * .63, lat - 49.7)
 
-def club_xy(name: str) -> np.ndarray:
-    return np.array(xy(*CLUBS[name][:2]), dtype=float)
+def club_xy(name: str, stage: int = 1) -> np.ndarray:
+    loc = SCHEMATIC_07.get(name,CLUBS[name][:2]) if stage >= 7 else CLUBS[name][:2]
+    return np.array(xy(*loc), dtype=float)
 
 def load_matches() -> list[dict]:
     with CSV.open(newline="", encoding="utf-8") as f:
@@ -189,7 +207,68 @@ def simplify_branch(start, end):
         knee2 = np.array([knee[0], ey])
     return [knee, knee2, end]
 
+def exact_offset(points, amount):
+    """Offset an octilinear rail with mitered bends, retaining exact angles."""
+    p = np.asarray(points, dtype=float)
+    normals = [unit_normal(a,b) for a,b in zip(p,p[1:])]
+    result = [p[0] + amount*normals[0]]
+    for i in range(1,len(p)-1):
+        a,b = p[i-1:i+1]
+        c = p[i+1]
+        d1,d2 = b-a,c-b
+        # Intersect the two offset segment lines at their common bend.
+        q1 = b + amount*normals[i-1]
+        q2 = b + amount*normals[i]
+        det = d1[0]*d2[1] - d1[1]*d2[0]
+        if abs(det) < 1e-10:
+            result.append(q1)
+        else:
+            delta = q2-q1
+            t = (delta[0]*d2[1]-delta[1]*d2[0])/det
+            result.append(q1+t*d1)
+    result.append(p[-1]+amount*normals[-1])
+    result[0] = p[0]
+    return np.array(result)
+
+def route_points_stage7(opponent):
+    """Hand-set octilinear trunk lines; near clubs share most of their route."""
+    o = club_xy("Man City",7)
+    d = club_xy(opponent,7)
+    se = [o,(2.84,3.78),(3.34,3.28),(3.93,2.69)]
+    mid = [o,(2.64,3.48),(2.91,3.21)]
+    if opponent == "Sunderland":
+        return np.array([o,(2.646,4.18),(3.156,4.69),d])
+    if opponent == "Man United":
+        return np.array([o,(2.60,3.826),(d[0],3.826),d])
+    if opponent == "Liverpool":
+        return np.array([o,(2.55,3.876),(d[0],3.876),d])
+    if opponent == "Bournemouth":
+        return np.array([o,(2.57,3.704),(2.57,2.10),(2.85,1.82),(2.85,d[1]),d])
+    if opponent == "Nottm Forest":
+        return np.vstack([exact_offset(se[:3],-.11),d])
+    if opponent == "Ipswich":
+        rail = exact_offset(se,.11)
+        q = rail[-1]
+        # Keep the same 45-degree heading, then finish horizontally.
+        knee = np.array([q[0]+q[1]-d[1],d[1]])
+        return np.vstack([rail,knee,d])
+    if opponent in ("Fulham","Crystal Palace","Brighton"):
+        lane = {"Fulham":-.055,"Crystal Palace":.055,"Brighton":0}[opponent]
+        rail = exact_offset(se+[(3.93,d[1])],lane)
+        return np.vstack([rail,d])
+    if opponent == "Aston Villa":
+        rail = exact_offset(mid+[(2.91,d[1])],-.035)
+        return np.vstack([rail,d])
+    if opponent == "Coventry":
+        rail = exact_offset(mid+[(2.91,2.95)],.035)
+        q = rail[-1]
+        knee = np.array([q[0]+.15,q[1]-.15])
+        return np.vstack([rail,knee,(knee[0],d[1]),d])
+    raise KeyError(opponent)
+
 def route_points(opponent: str, stage: int, venue: str | None = None):
+    if stage >= 7:
+        return route_points_stage7(opponent)
     origin, dest = club_xy("Man City"), club_xy(opponent)
     if stage == 1:
         return np.array([origin, dest])
@@ -243,7 +322,7 @@ def route_points(opponent: str, stage: int, venue: str | None = None):
     return np.vstack([base, branch])
 
 def draw_route(ax, points, color, stage, venue):
-    if stage >= 6:
+    if stage == 6:
         points = rounded_route(points)
     x, y = points[:,0], points[:,1]
     width = 3.6 if stage < 4 else 4.4
@@ -252,7 +331,7 @@ def draw_route(ax, points, color, stage, venue):
                 solid_joinstyle="round",zorder=2)
     ax.plot(x,y,color=color,linewidth=width,solid_capstyle="round",
             solid_joinstyle="round",zorder=3)
-    if stage >= 6 and len(points) > 1:
+    if stage == 6 and len(points) > 1:
         # Small arrow next to the opponent station: City home = toward City,
         # City away = toward opponent. Colour still records City's result.
         a, b = points[-2], points[-1]
@@ -292,21 +371,22 @@ def draw_nodes(ax, stage: int, rows):
         names = ["Man City"] + [n for n in names if n != "Man City"]
     for name in names:
         lon, lat, label, scale, delta = CLUBS[name]
-        p = club_xy(name)
+        p = club_xy(name,stage)
         radius = (.055 if stage < 4 else .060) * scale
         if name == "Man City": radius *= 1.65
         ax.add_patch(Circle(p,radius,facecolor="white",edgecolor=INK,
                             linewidth=2 if stage >= 4 else 1.3,zorder=8))
         if stage >= 3:
-            ox,oy=delta
+            ox,oy=LABEL_07[name] if stage>=7 else delta
             ha = "left" if ox >= 0 else "right"
             ax.text(p[0]+ox,p[1]+oy,label,ha=ha,va="center",
-                    fontsize=7.5 if stage < 5 else 12.0,
+                    fontsize=7.5 if stage < 5 else 12.0 if stage < 7 or name=="Man City" else 9.5,
                     fontweight="bold",color=INK,zorder=10,
                     path_effects=[pe.withStroke(linewidth=1.3,foreground=HALO)] if stage>=5 else [])
     if stage >= 6:
         played = {r["opponent"] for r in rows}
-        for name,(lon,lat) in UNPLAYED.items():
+        unplayed = UNPLAYED_07 if stage >= 7 else UNPLAYED
+        for name,(lon,lat) in unplayed.items():
             if name in played:
                 continue
             ax.add_patch(Circle(xy(lon,lat), .024, facecolor=HALO,
@@ -333,8 +413,10 @@ def decorate(ax, rows, stage):
         for x,code,word in legend:
             ax.plot([x,x+.28],[y,y],color=COLORS[code],lw=4.5,zorder=11)
             ax.text(x+.36,y,word,va="center",fontsize=11 if stage>=5 else 9,weight="bold",color=INK,zorder=11)
-        caption = ("Arrow toward club = City away  ·  arrow toward City = City home  ·  small dots = unplayed"
-                   if stage >= 6 else "H / A beside each club = City home / away")
+        caption = ("H / A beside each club = City home / away  ·  small dots = unplayed"
+                   if stage >= 7 else
+                   "Arrow toward club = City away  ·  arrow toward City = City home  ·  small dots = unplayed"
+                   if stage == 6 else "H / A beside each club = City home / away")
         ax.text(.39 if stage>=6 else 1.12 if stage>=5 else .28,.26,caption,
                 fontsize=8.5 if stage>=6 else 9.5 if stage>=5 else 8.3,color="#526478",zorder=11)
     else:
@@ -342,10 +424,23 @@ def decorate(ax, rows, stage):
                 fontsize=9,color=INK,zorder=11)
 
 def label_home_away(ax, rows, stage):
-    if stage < 4 or stage >= 6: return
+    if stage < 4 or stage == 6: return
     by_name = {r["opponent"]:r for r in rows}
     for name,r in by_name.items():
-        p = club_xy(name)
+        p = club_xy(name,stage)
+        if stage >= 7:
+            dx,dy = {
+                "Man United":(.08,-.055), "Liverpool":(.08,-.055),
+                "Sunderland":(.085,-.09), "Nottm Forest":(.08,-.09),
+                "Aston Villa":(-.085,.085), "Coventry":(.08,.085),
+                "Ipswich":(-.03,.105), "Fulham":(-.085,.085),
+                "Crystal Palace":(.08,.085), "Brighton":(.08,.085),
+                "Bournemouth":(.08,.085),
+            }[name]
+            ax.text(p[0]+dx,p[1]+dy,r["venue"][0],ha="center",va="center",
+                    fontsize=8.2,weight="bold",color="#304357",zorder=10,
+                    path_effects=[pe.withStroke(linewidth=1.0,foreground=HALO)])
+            continue
         # small compact match tab, offset to keep it distinct from club label
         dx = .09 if CLUBS[name][4][0] >= 0 else -.09
         dy = -.12 if CLUBS[name][4][1] >= 0 else .11
@@ -381,6 +476,7 @@ def render(rows, stage):
       4:"04_stations_and_result_legend",
       5:"05_final_polished_map",
       6:"06_revised_final_map",
+      7:"07_octilinear_shared_corridors",
     }
     path=OUT/(names[stage]+".png")
     fig.savefig(path,dpi=150,facecolor=fig.get_facecolor(),bbox_inches="tight",pad_inches=.10)
@@ -390,7 +486,7 @@ def render(rows, stage):
 def main():
     rows=load_matches()
     print(f"Snapshot: {len(rows)} EPL matches; {dict(Counter(r['result'] for r in rows))}")
-    for stage in range(1,7):
+    for stage in range(1,8):
         print(render(rows,stage))
 
 if __name__=="__main__":
