@@ -234,6 +234,15 @@ def render(club: str, venue: str, season: list[dict]) -> tuple[Path, dict]:
         rails = route.build_routes(club, positions, matches)
         if len(route.crossings(rails, positions[club])) > 2:
             rails = crossing_free_fan(club, positions)
+    if club == 'Chelsea' and any(set(pair) == {'Sunderland', 'Tottenham'}
+                                 for pair in route.crossings(rails, positions[club])):
+        # This short London spur passes under the Sunderland corridor in the
+        # generic solver. A small south-side bend keeps the two rails apart.
+        center, destination = positions[club], positions['Tottenham']
+        delta = destination - center
+        normal = np.array([-delta[1], delta[0]]) / np.linalg.norm(delta)
+        rails['Tottenham'] = np.array([center, center + .55 * delta - .08 * normal,
+                                      destination])
     fig, ax = plt.subplots(figsize=(10.8, 16), dpi=150)
     fig.patch.set_facecolor(SEA)
     ax.set_facecolor(SEA)

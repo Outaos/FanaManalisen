@@ -49,7 +49,9 @@ for legibility. A home map connects the selected club to its 19 opponents as
 a schematic comparison; it does not depict travel from those opponents.
 For western hubs where v2's shared southeast trunk creates more than two
 crossings, v3 uses a deterministic two-bend radial fan that preserves route
-separation. This keeps the club-specific result lines readable.
+separation. A short Chelsea-to-Tottenham connector has a south-side bend to
+clear the Sunderland corridor. These club-specific adjustments keep all
+16 route networks free of off-hub line crossings in the geometry audit.
 
 ```sh
 python _1_SM_Man_City_v3.py
