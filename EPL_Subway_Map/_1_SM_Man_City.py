@@ -218,18 +218,21 @@ def draw_nodes(ax, stage: int):
                     path_effects=[pe.withStroke(linewidth=1.3,foreground=HALO)] if stage>=5 else [])
 
 def decorate(ax, rows, stage):
-    ax.text(.10,6.87,"MAN CITY",fontsize=32 if stage>=5 else 25,
+    title_x = 1.08 if stage >= 5 else .10
+    title_y = 5.86 if stage >= 5 else 6.87
+    ax.text(title_x,title_y,"MAN CITY",fontsize=32 if stage>=5 else 25,
             weight="heavy",color=INK,va="top",zorder=12)
-    ax.text(.12,6.51,"THE 2026/27 RESULTS NETWORK",fontsize=13 if stage>=5 else 10.8,
+    ax.text(title_x+.02,title_y-.36,"THE 2026/27 RESULTS NETWORK",fontsize=13 if stage>=5 else 10.8,
             weight="bold",color="#415266",zorder=12)
-    ax.text(.12,6.27,"PREMIER LEAGUE  ·  THROUGH 26 NOV 2026",fontsize=10 if stage>=5 else 8.5,
+    ax.text(title_x+.02,title_y-.60,"PREMIER LEAGUE  ·  THROUGH 26 NOV 2026",fontsize=10 if stage>=5 else 8.5,
             color="#536477",zorder=12)
     if stage>=4:
         y=.52
-        for x,code,word in [(.28,"W","WIN"),(1.38,"D","DRAW"),(2.50,"L","LOSS")]:
+        legend = [(1.12,"W","WIN"),(2.46,"D","DRAW"),(3.77,"L","LOSS")] if stage>=5 else [(.28,"W","WIN"),(1.38,"D","DRAW"),(2.50,"L","LOSS")]
+        for x,code,word in legend:
             ax.plot([x,x+.28],[y,y],color=COLORS[code],lw=4.5,zorder=11)
             ax.text(x+.36,y,word,va="center",fontsize=11 if stage>=5 else 9,weight="bold",color=INK,zorder=11)
-        ax.text(.28,.28,"H / A beside each club = City home / away",
+        ax.text(1.12 if stage>=5 else .28,.28,"H / A beside each club = City home / away",
                 fontsize=9.5 if stage>=5 else 8.3,color="#526478",zorder=11)
     else:
         ax.text(.12,.31,f"{len(rows)} completed matches  ·  stage {stage}/5",
@@ -251,7 +254,10 @@ def render(rows, stage):
     fig,ax=plt.subplots(figsize=(10.8,15.2),dpi=150)
     fig.patch.set_facecolor(SEA)
     ax.set_facecolor(SEA)
-    ax.set_xlim(-.05,5.15); ax.set_ylim(.05,7.05)
+    if stage >= 5:
+        ax.set_xlim(1.03,5.15); ax.set_ylim(.05,5.95)
+    else:
+        ax.set_xlim(-.05,5.15); ax.set_ylim(.05,7.05)
     ax.set_aspect("equal")
     ax.axis("off")
     draw_land(ax,stage)
