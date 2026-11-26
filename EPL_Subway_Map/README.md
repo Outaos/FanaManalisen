@@ -1,6 +1,6 @@
 # Manchester City · EPL results subway map
 
-Static schematic map of Manchester City's completed **2026–27 Premier League** matches, verified **26 November 2026**. It uses City's perspective: green = win, red = loss, gray = draw. Each opponent has one line for the one league meeting played so far. Small **H** and **A** tags indicate whether City played at home or away. Unplayed fixtures and matches in other competitions are excluded.
+Static schematic map of Manchester City's completed **2026–27 Premier League** matches, verified **26 November 2026**. It uses City's perspective: green = win, red = loss, gray = draw. Each opponent has one line for the one league meeting played so far. Each opponent's route reserves adjacent home and away lane positions; the completed match occupies its corresponding slot. Small **H** and **A** tags indicate whether City played at home or away. Unplayed fixtures and matches in other competitions are excluded.
 
 ## Reproduce
 

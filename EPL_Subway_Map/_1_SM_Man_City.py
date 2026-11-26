@@ -153,7 +153,7 @@ def simplify_branch(start, end):
         knee2 = np.array([knee[0], ey])
     return [knee, knee2, end]
 
-def route_points(opponent: str, stage: int):
+def route_points(opponent: str, stage: int, venue: str | None = None):
     origin, dest = club_xy("Man City"), club_xy(opponent)
     if stage == 1:
         return np.array([origin, dest])
@@ -171,6 +171,10 @@ def route_points(opponent: str, stage: int):
             "Brighton": ("southeast", -.035, 6),
         }
         corridor, amount, count = final_routes.get(opponent, (corridor,amount,count))
+    if stage >= 3 and venue in ("HOME", "AWAY"):
+        # Each opponent's base offset is the centre of a reserved home/away
+        # pair. The completed match occupies one of its adjacent lane slots.
+        amount += .012 if venue == "HOME" else -.012
     base = np.array(CORRIDORS[corridor][:count])
     if stage == 2:
         amount = 0
@@ -254,7 +258,7 @@ def render(rows, stage):
     # Draw corridors from north to south; the outlines maintain visual
     # separation even when tracks meet the same station.
     for row in rows:
-        points=route_points(row["opponent"],stage)
+        points=route_points(row["opponent"],stage,row["venue"])
         draw_route(ax,points,COLORS[row["result"]],stage,row["venue"])
     draw_nodes(ax,stage)
     label_home_away(ax,rows,stage)
