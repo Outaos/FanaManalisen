@@ -7,6 +7,7 @@ topology, sector, lane, octilinear connector, label, and rendering rules.
 from __future__ import annotations
 
 from collections import defaultdict
+from itertools import combinations
 from pathlib import Path
 import argparse
 import json
@@ -162,6 +163,37 @@ def crossings(routes,hub):
                         result.append((a,b))
     return result
 
+def declutter_nodes(positions,hub,played):
+    """Separate colliding stations with bounded, deterministic displacement."""
+    out={name:p.copy() for name,p in positions.items()}
+    original={name:p.copy() for name,p in positions.items()}
+    names=sorted(out)
+    for _ in range(12):
+        moved=False
+        for i,a in enumerate(names):
+            for b in names[i+1:]:
+                pa,pb=out[a],out[b]
+                ra=.10 if a==hub else .038 if a in played else .024
+                rb=.10 if b==hub else .038 if b in played else .024
+                target=ra+rb+.018
+                d=pb-pa; length=np.linalg.norm(d)
+                if length>=target: continue
+                unit=norm(d) if length>1e-8 else np.array([1.,0.])
+                gap=target-length
+                wa=0 if a==hub else 1 if a not in played else .5
+                wb=0 if b==hub else 1 if b not in played else .5
+                if wa+wb==0: continue
+                out[a]-=unit*gap*wa/(wa+wb)
+                out[b]+=unit*gap*wb/(wa+wb)
+                moved=True
+        for name in names:
+            if name==hub: continue
+            delta=out[name]-original[name]
+            distance=np.linalg.norm(delta)
+            if distance>.12: out[name]=original[name]+delta/distance*.12
+        if not moved: break
+    return out
+
 def build_routes(hub,positions,rows):
     o=positions[hub]; groups=defaultdict(list)
     for row in rows: groups[sector(o,positions[row['opponent']])].append(row)
@@ -313,6 +345,7 @@ def render(hub='Man City',demo=False):
                   'Aston Villa','Coventry','Nottm Forest')
     rows=data.load_matches() if not demo else [dict(opponent=n,result='D',venue='')
                                            for n in demo_targets]
+    positions=declutter_nodes(positions,hub,{r['opponent'] for r in rows})
     routes=build_routes(hub,positions,rows)
     fig,ax=plt.subplots(figsize=(10.8,16.0),dpi=150)
     fig.patch.set_facecolor(SEA);ax.set_facecolor(SEA)
@@ -362,14 +395,24 @@ if __name__=='__main__':
         assert sum(v=={'England','Wales'} for v in edges.values())>0
         positions={n:data.club_xy(n,9) for n in data.CLUBS}
         positions.update({n:xy(*v) for n,v in data.UNPLAYED_07.items()})
-        city=build_routes('Man City',positions,data.load_matches())
+        city_rows=data.load_matches()
+        city_pos=declutter_nodes(positions,'Man City',{r['opponent'] for r in city_rows})
+        city=build_routes('Man City',city_pos,city_rows)
         cluster=('Man City','Man United','Liverpool','Everton',
                  'Aston Villa','Coventry','Nottm Forest')
-        arsenal=build_routes('Arsenal',positions,[{'opponent':n} for n in cluster])
-        assert not crossings(city,positions['Man City'])
-        assert not crossings(arsenal,positions['Arsenal'])
+        arsenal_pos=declutter_nodes(positions,'Arsenal',set(cluster))
+        arsenal=build_routes('Arsenal',arsenal_pos,[{'opponent':n} for n in cluster])
+        assert not crossings(city,city_pos['Man City'])
+        assert not crossings(arsenal,arsenal_pos['Arsenal'])
+        for hub,pos,played in (('Man City',city_pos,{r['opponent'] for r in city_rows}),
+                               ('Arsenal',arsenal_pos,set(cluster))):
+            for a,b in combinations(pos,2):
+                ra=.10 if a==hub else .038 if a in played else .024
+                rb=.10 if b==hub else .038 if b in played else .024
+                assert np.linalg.norm(pos[a]-pos[b])>=ra+rb+.015,(hub,a,b)
         print('Shared border edges:',sum(len(v)>1 for v in edges.values()))
         print('City: 11 routes, 0 crossings; Arsenal cluster: 7 routes, 0 crossings')
+        print('Both layouts: no station-circle collisions')
     print(render()[0])
     if args.demo_arsenal:
         print(render('Arsenal',demo=True)[0])

@@ -23,10 +23,12 @@ change or reuse that script's hand-set route geometry.
 4. **Crossings.** A lane-swap search minimizes intersections across the whole
    route graph. `crossings()` reports any remaining intersections outside the
    hub circle. The algorithm does not yet guarantee a planar layout.
-5. **Hub fan and labels.** A short cubic easing and gradual line-width increase
-   bring tracks out from under the hub station. White casings start farther
-   away. Label candidates are scored against station circles and other label
-   boxes rather than assigned per club.
+5. **Stations, hub fan, and labels.** `declutter_nodes()` gives overlapping
+   stations a bounded, deterministic push while keeping the hub fixed. A short
+   cubic easing and gradual line-width increase bring tracks out from under
+   the hub station. White casings start farther away. Label candidates are
+   scored against station circles and other label boxes rather than assigned
+   per club.
 6. **Cornwall.** The legend sits below the mapped land instead of covering
    southwestern England, so Cornwall remains visible.
 
