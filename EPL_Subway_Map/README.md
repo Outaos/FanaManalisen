@@ -31,8 +31,9 @@ The original `_1_SM_Man_City.py` remains intact. The separate
 `_1_SM_Man_City_v2.py` tests calculated corridor, lane, branch, label, and
 shared-border rules. Its City output is `10_v2_rule_based_man_city.png`;
 `--demo-arsenal` writes a neutral seven-route Arsenal layout test, not Arsenal
-results. See [V2_DESIGN.md](V2_DESIGN.md) for the rules, checks, and current
-limits. Run `python _1_SM_Man_City_v2.py --check` for the geometry audit.
+results. `--demo-arsenal-all` runs a 19-route neutral stress test. See
+[V2_DESIGN.md](V2_DESIGN.md) for the rules, checks, and remaining station
+clearance limits. Run `python _1_SM_Man_City_v2.py --check` for the audit.
 
 The drawn lines are **diagrammatic**, not road, rail, or travel routes. Stadium markers remain near their real locations but are separated slightly where needed. In stages 07–09, the southeast routes share a diagonal trunk past the Nottingham area; the Fulham, Palace, and Brighton tracks stay parallel almost to Fulham. In stages 08–09, Villa, Bournemouth, and Coventry share the southbound trunk nearly to Villa, where the outer lanes branch and Bournemouth carries on between them. Stage 09 reduces the southbound lane spacing to match the southeast bundle and simplifies the coastline and internal borders at the map's display scale. Westbound routes leave City in adjacent lanes. Long segments are horizontal, vertical, or 45° diagonals; only tiny station connectors use other angles. White casings separate adjacent tracks. The outline of Ireland in stages 1–5 comes from [johan/world.geo.json](https://github.com/johan/world.geo.json), derived from Natural Earth public-domain data. The revised map's [UK country boundaries](data/uk-countries.geojson) are from [GeoDataViewer's UK Countries Boundaries](https://geodataviewer.com/datasets/boundaries/uk-countries-boundaries/) (CC BY 4.0; original administrative boundaries: ©EuroGeographics ©UN-FAO ©Turkstat, via Eurostat GISCO).
 

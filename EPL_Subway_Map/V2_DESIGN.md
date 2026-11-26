@@ -20,9 +20,11 @@ change or reuse that script's hand-set route geometry.
    ordered into equally spaced parallel lanes by destination position.
    Routes follow the spine until the nearest sensible branch point; small
    0°/45°/90° connectors finish at each club.
-4. **Crossings.** A lane-swap search minimizes intersections across the whole
-   route graph. `crossings()` reports any remaining intersections outside the
-   hub circle. The algorithm does not yet guarantee a planar layout.
+4. **Crossings and clearance.** A lane-swap search minimizes intersections
+   across the whole route graph. When necessary, the algorithm tries an
+   adjacent compass sector and small corridor shifts, scoring crossings and
+   station clearance. `crossings()` and `station_intrusions()` report remaining
+   problems. The search does not guarantee a fully clear layout.
 5. **Stations, hub fan, and labels.** `declutter_nodes()` gives overlapping
    stations a bounded, deterministic push while keeping the hub fixed. A short
    cubic easing and gradual line-width increase bring tracks out from under
@@ -37,18 +39,22 @@ change or reuse that script's hand-set route geometry.
 ```sh
 python _1_SM_Man_City_v2.py --check
 python _1_SM_Man_City_v2.py --demo-arsenal
+python _1_SM_Man_City_v2.py --demo-arsenal-all
 ```
 
 The first command writes `outputs/10_v2_rule_based_man_city.png` and checks
-the shared borders and route crossings. The optional second command also
-writes `outputs/10_v2_arsenal_cluster_test.png`. Arsenal's seven gray lines
-are **neutral layout probes, not Arsenal match results**.
+the shared borders, route crossings, and station circles. The optional
+commands also write `outputs/10_v2_arsenal_cluster_test.png` (seven routes)
+or `outputs/10_v2_arsenal_full_stress_test.png` (19 routes). All Arsenal
+lines are **neutral layout probes, not Arsenal match results**.
 
-The current checks find zero crossings for City's 11 completed matches and
-the seven-route Arsenal cluster. A diagnostic with **all 19 neutral Arsenal
-opponents** still produces 18 crossing pairs. Thus the engine is reusable for
-another hub and a dense cluster, while a complete second-club network still
-needs better branch selection and local-node decluttering. For another
-country, supply positions and match rows to `build_routes`, and a compatible
-administrative GeoJSON to `topological_countries`; the renderer's fills,
-annotations, and frame would need that country's settings.
+The current checks find zero crossings and no unrelated station intrusions
+for City's 11 completed matches. The seven-route Arsenal cluster has zero
+line crossings but one route passes too near an unrelated station. The full
+19-route neutral Arsenal stress test also has zero proper line crossings,
+while **two routes still pass too near unrelated stations**. The full test is
+useful for finding these limits and is not a polished Arsenal results map.
+For another country, supply positions and match rows to
+`build_routes`, and a compatible administrative GeoJSON to
+`topological_countries`; the renderer's fills, annotations, and frame need
+that country's settings.
