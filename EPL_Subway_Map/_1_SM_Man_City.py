@@ -266,7 +266,29 @@ def route_points_stage7(opponent):
         return np.vstack([rail,knee,(knee[0],d[1]),d])
     raise KeyError(opponent)
 
+def route_points_stage8(opponent):
+    """Keep stage 07, except for one southbound three-track corridor."""
+    if opponent not in ("Aston Villa", "Coventry", "Bournemouth"):
+        return route_points_stage7(opponent)
+    o = club_xy("Man City",8)
+    d = club_xy(opponent,8)
+    # Villa is the west lane, Bournemouth the middle through lane, Coventry
+    # the east lane. All three follow the same bends almost to Villa.
+    south = [o,(2.64,3.48),(2.93,3.19),(2.93,2.81)]
+    if opponent == "Aston Villa":
+        rail = exact_offset(south,-.08)
+        return np.vstack([rail,d])
+    if opponent == "Coventry":
+        rail = exact_offset(south,.08)
+        q = rail[-1]
+        knee = np.array([d[0],q[1]-(d[0]-q[0])])
+        return np.vstack([rail,knee,d])
+    rail = exact_offset(south,0)
+    return np.vstack([rail,(rail[-1][0],d[1]),d])
+
 def route_points(opponent: str, stage: int, venue: str | None = None):
+    if stage >= 8:
+        return route_points_stage8(opponent)
     if stage >= 7:
         return route_points_stage7(opponent)
     origin, dest = club_xy("Man City"), club_xy(opponent)
@@ -437,6 +459,8 @@ def label_home_away(ax, rows, stage):
                 "Crystal Palace":(.08,.085), "Brighton":(.08,.085),
                 "Bournemouth":(.08,.085),
             }[name]
+            if stage >= 8 and name == "Bournemouth":
+                dx,dy = -.095,.075
             ax.text(p[0]+dx,p[1]+dy,r["venue"][0],ha="center",va="center",
                     fontsize=8.2,weight="bold",color="#304357",zorder=10,
                     path_effects=[pe.withStroke(linewidth=1.0,foreground=HALO)])
@@ -477,6 +501,7 @@ def render(rows, stage):
       5:"05_final_polished_map",
       6:"06_revised_final_map",
       7:"07_octilinear_shared_corridors",
+      8:"08_southbound_three_track_corridor",
     }
     path=OUT/(names[stage]+".png")
     fig.savefig(path,dpi=150,facecolor=fig.get_facecolor(),bbox_inches="tight",pad_inches=.10)
@@ -486,7 +511,7 @@ def render(rows, stage):
 def main():
     rows=load_matches()
     print(f"Snapshot: {len(rows)} EPL matches; {dict(Counter(r['result'] for r in rows))}")
-    for stage in range(1,8):
+    for stage in range(1,9):
         print(render(rows,stage))
 
 if __name__=="__main__":
